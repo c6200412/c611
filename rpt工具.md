@@ -1,7 +1,7 @@
 一、rqt 是什么
 rqt = 一套基于图形界面（Qt）的工具集合，每个 rqt_xxx 就是一个小工具，各管一件事：
-
 工具	干什么	相当于
+
 rqt_graph	看节点/话题图	✅ 你已经会了
 rqt_console	看所有节点的日志（报错/警告）	看「系统日志」
 rqt_plot	把数据画成实时曲线	看「波形图」
@@ -16,14 +16,12 @@ rqt_dep	看包依赖关系	看「谁依赖谁」
 注意：这堆工具全是图形界面，所以才需要 Qt——这正好解释了之前 rqt_graph 报错要装 PyQt5 的原因，现在全串起来了。
 
 二、那条安装命令在干嘛
-
 sudo apt install ros-humble-rqt*
 ros-humble- = ROS2 Humble 版的包（前缀）
 rqt* = 通配符，把所有 rqt 开头的包全装上
 一条命令装完整个工具箱，不用一个个装。
 
 三、那条自查命令在干嘛
-
 ros2 pkg list | grep rqt
 ros2 pkg list = 列出所有已安装的 ROS2 包
 | grep rqt = 从里面筛出名字带 rqt 的
@@ -31,13 +29,11 @@ ros2 pkg list = 列出所有已安装的 ROS2 包
 
 四、「先装后认」是什么意思
 你笔记里这句很对：
-
 先装：一口气全装好，别纠结
 后认：不用每个都学，先认识它们叫啥、能干嘛，用的时候再深究
 14 个工具里，你真正常用的其实就 3~4 个（graph、console、plot、image_view），其他用到再查。
 
 五、几个工具怎么启动（认识一下）
-
 ros2 run rqt_graph rqt_graph         # 节点图
 ros2 run rqt_console rqt_console     # 日志
 ros2 run rqt_plot rqt_plot           # 曲线
