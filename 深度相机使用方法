@@ -1,0 +1,130 @@
+# 深度相机使用方法（Orbbec Astra Pro + ROS2 Humble）
+
+## 一、当前开发环境
+
+| 项目 | 配置 |
+| --- | --- |
+| 电脑系统 | Windows 11 |
+| 虚拟机 | VMware Workstation |
+| Linux | Ubuntu 22.04.5 |
+| ROS2 | Humble |
+| 深度相机 | Orbbec Astra Pro |
+| 驱动包 | astra_camera |
+| 工作空间 | ~/ros2_ws |
+| 可视化软件 | RViz2 |
+
+## 二、整体流程
+
+深度相机接入 ROS2 的大体流程，可以总结为：从硬件连接，到驱动启动，再到数据处理，最后应用到机器人。
+
+以后无论更换 Astra Pro、RealSense 还是其他深度相机，都可以按照这个思路进行。
+
+### 1. 整体流程（七步）
+
+1. 连接深度相机 —— USB / USB-C / 网线等
+2. 安装相机驱动 —— 安装厂商 SDK 和 ROS2 驱动
+3. 启动相机节点 —— 配置深度、彩色、红外等功能
+4. 发布 ROS2 话题 —— Image / CameraInfo / PointCloud2
+5. RViz2 —— 查看图像和点云
+6. Python / C++ —— 订阅和处理数据
+7. 机器人应用 —— 识别物体、测量距离、空间定位、机械臂抓取
+
+### 2. 每一步具体做什么
+
+| 阶段 | 具体工作 | 你需要掌握什么 |
+| --- | --- | --- |
+| 1. 硬件连接 | 连接相机，检查 USB | Linux 设备识别 |
+| 2. 驱动安装 | 安装 SDK 和 ROS2 驱动 | Linux、CMake、ROS2 |
+| 3. 启动相机 | 运行 launch 文件 | ROS2 节点、参数 |
+| 4. 数据发布 | 相机向 ROS2 发布话题 | Topic、Message |
+| 5. 可视化 | RViz2 查看数据 | Image、PointCloud2、TF |
+| 6. 数据处理 | Python/C++ 读取数据 | 订阅、坐标转换、算法 |
+| 7. 实际应用 | 机器人使用相机数据 | 感知、定位、运动规划 |
+
+## 三、已确认的 ROS2 话题
+
+目前相机能够发布以下数据：
+
+| 话题 | 作用 |
+| --- | --- |
+| /camera/depth/image_raw | 深度图像 |
+| /camera/ir/image_raw | 红外图像 |
+| /camera/depth/camera_info | 相机内参 |
+| /camera/depth/points | 三维点云 |
+
+已经验证：
+
+- 深度图像分辨率：640×480
+- 红外图像帧率：约 29.7 FPS
+- 点云分辨率：640×480
+- 点云曾经成功显示约 58,784 个点
+- 深度相机坐标系：camera_depth_optical_frame
+
+## 四、以后如何启动
+
+### 终端 1：启动相机
+
+```bash
+source /opt/ros/humble/setup.bash
+source ~/ros2_ws/install/setup.bash
+ros2 launch astra_camera astra_pro.launch.xml enable_color:=false use_uvc_camera:=false enable_depth:=true enable_ir:=true enable_point_cloud:=true
+```
+
+### 终端 2：启动 RViz2
+
+```bash
+source /opt/ros/humble/setup.bash
+source ~/ros2_ws/install/setup.bash
+rviz2
+```
+
+## 五、拿 Astra Pro 举例（操作步骤）
+
+目前已经完成了前面七步中的大部分工作，例如：
+
+### 1. 启动相机
+
+```bash
+ros2 launch astra_camera astra_pro.launch.xml
+```
+
+目前使用的是关闭彩色功能的启动参数版本。
+
+### 2. 查看相机发布的话题
+
+```bash
+ros2 topic list
+```
+
+会看到类似：
+
+```
+/camera/depth/image_raw
+/camera/depth/camera_info
+/camera/depth/points
+/camera/ir/image_raw
+```
+
+### 3. 查看点云数据
+
+```bash
+ros2 topic hz /camera/depth/points
+```
+
+### 4. RViz2 查看三维点云
+
+```bash
+rviz2
+```
+
+添加 PointCloud2 显示器，将 Topic 设置为：
+
+```
+/camera/depth/points
+```
+
+Fixed Frame 设置为：
+
+```
+camera_depth_optical_frame
+```
