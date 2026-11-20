@@ -1,6 +1,6 @@
-# 深度相机使用方法（Orbbec Astra Pro + ROS2 Humble）
+# 深度相机使用与颜色识别手册（Orbbec Astra Pro + ROS2 Humble）
 
-## 一、当前开发环境
+## 一、开发环境
 
 | 项目 | 配置 |
 | --- | --- |
@@ -10,16 +10,14 @@
 | ROS2 | Humble |
 | 深度相机 | Orbbec Astra Pro |
 | 驱动包 | astra_camera |
-| 工作空间 | ~/ros2_ws |
+| 工作空间 | ~/ros2_new_ws |
 | 可视化软件 | RViz2 |
 
 ## 二、整体流程
 
-深度相机接入 ROS2 的大体流程，可以总结为：从硬件连接，到驱动启动，再到数据处理，最后应用到机器人。
+深度相机接入 ROS2 的流程可以概括为：硬件连接 → 驱动安装 → 驱动启动 → 数据处理 → 机器人应用。以后无论换成 Astra Pro、RealSense 还是其他深度相机，都可以套用这个思路。
 
-以后无论更换 Astra Pro、RealSense 还是其他深度相机，都可以按照这个思路进行。
-
-### 1. 整体流程（七步）
+### 1. 七步流程
 
 1. 连接深度相机 —— USB / USB-C / 网线等
 2. 安装相机驱动 —— 安装厂商 SDK 和 ROS2 驱动
@@ -41,56 +39,65 @@
 | 6. 数据处理 | Python/C++ 读取数据 | 订阅、坐标转换、算法 |
 | 7. 实际应用 | 机器人使用相机数据 | 感知、定位、运动规划 |
 
-## 三、已确认的 ROS2 话题
+## 三、硬件连接
 
-目前相机能够发布以下数据：
+1. 把相机插到 **USB 3.0 口**（蓝色口），尽量用原装或质量好的线。
+2. **确认 IR 激光投射器已点亮**：用手机摄像头对准相机正面（手机能拍到红外光），正常应能看到红色/紫色点阵光。看不到说明投射器没亮，深度会全为 0。
+3. 确认系统识别到两个设备：
 
-| 话题 | 作用 |
-| --- | --- |
-| /camera/depth/image_raw | 深度图像 |
-| /camera/ir/image_raw | 红外图像 |
-| /camera/depth/camera_info | 相机内参 |
-| /camera/depth/points | 三维点云 |
+   ```bash
+   lsusb | grep 2bc5
+   ```
 
-已经验证：
+   应看到：
 
-- 深度图像分辨率：640×480
-- 红外图像帧率：约 29.7 FPS
-- 点云分辨率：640×480
-- 点云曾经成功显示约 58,784 个点
-- 深度相机坐标系：camera_depth_optical_frame
+   ```
+   2bc5:0403  Orbbec ... Astra Pro            # 深度传感器（OpenNI）
+   2bc5:0501  Orbbec ... Astra Pro HD Camera  # 彩色相机（UVC）
+   ```
 
-## 四、以后如何启动
-
-### 终端 1：启动相机
+## 四、USB 规则（首次配置才需要）
 
 ```bash
-source /opt/ros/humble/setup.bash
-source ~/ros2_ws/install/setup.bash
-ros2 launch astra_camera astra_pro.launch.xml enable_color:=false use_uvc_camera:=false enable_depth:=true enable_ir:=true enable_point_cloud:=true
+cd ~/ros2_new_ws/src/ros2_astra_camera/astra_camera/scripts
+sudo bash install.sh
+sudo udevadm control --reload-rules && sudo udevadm trigger
 ```
 
-### 终端 2：启动 RViz2
+## 五、启动相机
+
+**注意：只开一个终端启动相机，不要重复启动**（多个驱动会争抢设备）。
 
 ```bash
+cd ~/ros2_new_ws
 source /opt/ros/humble/setup.bash
-source ~/ros2_ws/install/setup.bash
-rviz2
-```
-
-## 五、拿 Astra Pro 举例（操作步骤）
-
-目前已经完成了前面七步中的大部分工作，例如：
-
-### 1. 启动相机
-
-```bash
+source install/setup.bash
 ros2 launch astra_camera astra_pro.launch.xml
 ```
 
-目前使用的是关闭彩色功能的启动参数版本。
+> 必须用 `astra_pro.launch.xml`（彩色走 UVC，`use_uvc_camera` 默认 true）。用 `astra.launch.xml` 会导致彩色图为 0。
 
-### 2. 查看相机发布的话题
+如需完整指定各功能开关，可用完整参数版本：
+
+```bash
+ros2 launch astra_camera astra_pro.launch.xml \
+  enable_color:=true use_uvc_camera:=true \
+  enable_depth:=true enable_ir:=true enable_point_cloud:=true
+```
+
+如果暂时用不到彩色，可去掉彩色相关参数（关闭彩色功能）。
+
+## 六、验证数据
+
+另开一个终端：
+
+```bash
+source /opt/ros/humble/setup.bash
+ros2 topic hz /camera/depth_registered/points   # 彩色点云，应约 30 Hz
+ros2 topic hz /camera/color/image_raw           # 彩色图，应约 30 Hz
+```
+
+查看相机发布的所有话题：
 
 ```bash
 ros2 topic list
@@ -105,26 +112,175 @@ ros2 topic list
 /camera/ir/image_raw
 ```
 
-### 3. 查看点云数据
+查看点云发布频率：
 
 ```bash
 ros2 topic hz /camera/depth/points
 ```
 
-### 4. RViz2 查看三维点云
+## 七、已确认的 ROS2 话题
+
+| 话题 | 作用 |
+| --- | --- |
+| /camera/depth/image_raw | 深度图像 |
+| /camera/ir/image_raw | 红外图像 |
+| /camera/depth/camera_info | 相机内参 |
+| /camera/depth/points | 三维点云 |
+
+已验证的数据：
+
+- 深度图像分辨率：640×480
+- 红外图像帧率：约 29.7 FPS
+- 点云分辨率：640×480
+- 点云曾成功显示约 58,784 个点
+- 深度相机坐标系：camera_depth_optical_frame
+
+## 八、RViz2 可视化
 
 ```bash
+source /opt/ros/humble/setup.bash
+source ~/ros2_new_ws/install/setup.bash
 rviz2
 ```
 
-添加 PointCloud2 显示器，将 Topic 设置为：
+查看三维点云：添加 PointCloud2 显示器，Topic 设为 `/camera/depth/points`，Fixed Frame 设为 `camera_depth_optical_frame`。
+
+### 彩色点云
+
+彩色点云节点会把深度图按彩色相机的内参投影成点云，再把 RGB 图逐像素写入 `rgb` 字段，字段类型为 xyz + rgb（`point_cloud_xyzrgb.cpp:235`）。
+
+彩色点云默认关闭（`astra.launch.xml` 里 `enable_colored_point_cloud` 默认 false），用启动参数打开：
+
+```bash
+ros2 launch astra_camera astra.launch.xml enable_colored_point_cloud:=true
+```
+
+开启后代码会自动强制 `depth_registration = true`（`ob_camera_node.cpp:362-364`），并把深度对齐到彩色分辨率，然后在 RViz2 里显示 `/camera/depth_registered/points` 即可看到彩色点云。
+
+> 注：`astra_pro.launch.xml` 里该参数默认就是 true，Astra Pro 直接用那个 launch 即可。
+
+## 九、颜色识别（颜色 → 3D 位置）
+
+用 Orbbec **Astra Pro** 按颜色识别物体，得到它在相机坐标系下的 3D 位置和距离。
+
+### 1. 取色定阈值（首次或换目标时）
+
+```bash
+cd ~/ros2_new_ws
+source /opt/ros/humble/setup.bash
+python3 object_detector/color_picker.py
+```
+
+在弹出的窗口点击物体，终端打印该点的 RGB 值。记下后按 `q` 退出。
+
+### 2. 运行识别
+
+```bash
+cd ~/ros2_new_ws
+source /opt/ros/humble/setup.bash
+python3 object_detector/object_detector_3d.py \
+  --ros-args -p target_r_min:=70 -p target_r_max:=255 \
+              -p target_g_min:=0  -p target_g_max:=80  \
+              -p target_b_min:=0  -p target_b_max:=80
+```
+
+把物体放进视野，终端会打印：
 
 ```
-/camera/depth/points
+找到物体：x=0.29 y=-1.34 z=5.454  距离=5.624 m  点数=1921
 ```
 
-Fixed Frame 设置为：
+### 3. 颜色阈值怎么定
 
+阈值是 **RGB** 值，规则为 `min = 实测值 - 容差`、`max = 实测值 + 容差`（容差一般 30~60）。先用 `color_picker.py` 点到物体拿到 `RGB=(r,g,b)`，再按规则设阈值。
+
+常用参数：
+
+- `target_r/g_b_min/max`：颜色范围
+- `min_points`：最少匹配点数（默认 50，物体小就调低，如 20）
+- `min_depth` / `max_depth`：距离范围（米）
+- `use_median`：true 用中位数（抗噪，默认）
+
+有两种改法：
+
+**方法一：命令行传参（推荐，不改代码）**
+
+```bash
+python3 object_detector/object_detector_3d.py \
+  --ros-args -p target_r_min:=... -p target_r_max:=... \
+              -p target_g_min:=... -p target_g_max:=... \
+              -p target_b_min:=... -p target_b_max:=...
 ```
-camera_depth_optical_frame
+
+**方法二：改脚本里的默认值**
+
+打开 `object_detector_3d.py`，在 `__init__` 里找到这几行（约 56~61 行），改数字：
+
+```python
+self.declare_parameter("target_r_min", 100)
+self.declare_parameter("target_r_max", 255)
+self.declare_parameter("target_g_min", 0)
+self.declare_parameter("target_g_max", 80)
+self.declare_parameter("target_b_min", 0)
+self.declare_parameter("target_b_max", 80)
 ```
+
+常见颜色示例（容差按 40 算）：
+
+| 颜色 | 典型 RGB | 命令行参数 |
+| --- | --- | --- |
+| 红色 | (180, 30, 30) | `r_min:=140 r_max:=255 g_max:=80 b_max:=80` |
+| 绿色 | (30, 180, 30) | `g_min:=140 g_max:=255 r_max:=80 b_max:=80` |
+| 蓝色 | (30, 30, 180) | `b_min:=140 b_max:=255 r_max:=80 g_max:=80` |
+| 黄色 | (200, 200, 30) | `r_min:=160 g_min:=160 b_max:=80` |
+| 白色 | (200, 200, 200) | `r_min:=160 g_min:=160 b_min:=160` |
+
+### 4. 输出
+
+| 话题 | 类型 | 含义 |
+| --- | --- | --- |
+| `/object_detector/position` | `PointStamped` | 物体 3D 位置（相机光心坐标系，米） |
+| `/object_detector/marker` | `Marker` | RViz 里的小球标记 |
+| `/object_detector/annotated` | `Image` | 带 2D 框和坐标的图像 |
+
+坐标系约定（相机光心）：x 右、y 下、z 前，`距离 = sqrt(x²+y²+z²)`。
+
+> 彩色点云 `/camera/depth_registered/points` 每个点是 32 字节（rgb 字段在偏移 16），脚本已兼容。
+
+## 十、常见问题（踩坑记录）
+
+| 现象 | 原因 | 解决 |
+| --- | --- | --- |
+| 彩色图为 0 | 用了 `astra.launch.xml`（没开 UVC） | 改用 `astra_pro.launch.xml` |
+| 彩色图很慢 / 点云发不出 | 开了**两个**相机节点 | 只留一个，`pkill -f astra_camera_node` 后重启 |
+| 深度全 0、IR 全黑 | IR 激光投射器没亮 | 检查硬件（见「硬件连接」） |
+| 检测不到目标 | 颜色阈值太紧 | 用 `color_picker.py` 取色后放宽阈值 |
+| 多物体混在一起 | 只按颜色过滤 | 需加形状/聚类（未实现） |
+
+## 十一、文件说明
+
+- `object_detector_3d.py` — 识别主脚本
+- `color_picker.py` — 取色工具
+- `README.md` — 本说明
+加好了（语法 OK）。现在脚本会锁住第一个识别到的目标，之后只跟踪它，不会被画面里别的红色物体干扰。
+
+新增的行为
+第一次检测到红色物体 → 锁定它的 3D 位置。
+之后每一帧只认「离上次位置 lock_radius 半径以内」的红色点 → 其他红色物体被忽略。
+目标丢失连续 unlock_after_lost 帧 → 自动解锁，重新锁定新目标。
+可选 smoothing 平滑，让坐标更稳。
+新增的 4 个参数
+参数	默认	含义
+lock_enabled	true	是否开启锁定（关掉就回到原来的纯颜色检测）
+lock_radius	0.5	锁定后只认上次位置半径多少米内的点
+unlock_after_lost	20	连续丢多少帧后自动解锁
+smoothing	0.0	位置平滑 0~1，越大越稳但越跟手慢
+推荐用法（锁定 + 轻微平滑）
+
+python3 object_detector/object_detector_3d.py \
+  --ros-args -p target_r_min:=70 -p target_g_max:=80 -p target_b_max:=80 \
+              -p lock_enabled:=true -p lock_radius:=0.5 -p smoothing:=0.6
+注意：锁定是「认第一次出现的目标位置」，所以启动时先让只有那一个物体进视野，锁定后它就跟住不动了。
+
+如果你想让目标动得比较快、别跟丢，把 lock_radius 调大（如 1.0）；如果两个红色物体离得近（<0.5m），把 lock_radius 调小（如 0.2）来区分。
+
